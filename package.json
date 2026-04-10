@@ -11,7 +11,7 @@
     "start:standalone": "node .next/standalone/server.js",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "postbuild": "npm run copy-static",
+    "postbuild": "npm run copy-static || echo 'Skipping copy-static on Vercel'",
     "copy-static": "if not exist .next\\standalone\\public mkdir .next\\standalone\\public && xcopy /E /I /Y public\\* .next\\standalone\\public\\ && if not exist .next\\standalone\\.next\\static mkdir .next\\standalone\\.next\\static && xcopy /E /I /Y .next\\static\\* .next\\standalone\\.next\\static\\",
     "vercel-build": "next build",
     "clean": "rmdir /S /Q .next 2>nul & rmdir /S /Q node_modules\\.cache 2>nul",
@@ -60,6 +60,7 @@
     "next": "16.2.2",
     "papaparse": "^5.4.1",
     "patch-package": "^8.0.0",
+    "postinstall-postinstall": "^2.1.0",
     "qrcode": "^1.5.3",
     "react": "19.0.0",
     "react-day-picker": "^8.10.1",
@@ -87,5 +88,9 @@
   "overrides": {
     "react": "$react",
     "react-dom": "$react-dom"
+  },
+  "engines": {
+    "node": "20.x || 22.x",
+    "npm": ">=9.0.0"
   }
 }
