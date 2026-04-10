@@ -1,8 +1,8 @@
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
-import { getFirestore, Firestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
-import { getStorage, FirebaseStorage } from 'firebase/storage';
-import { getAuth, Auth } from 'firebase/auth';
-import { getDatabase, Database } from 'firebase/database';
+import { getFirestore, Firestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, connectFirestoreEmulator } from 'firebase/firestore';
+import { getStorage, FirebaseStorage, connectStorageEmulator } from 'firebase/storage';
+import { getAuth, Auth, connectAuthEmulator } from 'firebase/auth';
+import { getDatabase, Database, connectDatabaseEmulator } from 'firebase/database';
 
 const firebaseConfig = {
   apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
@@ -21,9 +21,13 @@ const isFirebaseConfigValid = () => {
     firebaseConfig.apiKey &&
     firebaseConfig.projectId &&
     firebaseConfig.authDomain &&
-    firebaseConfig.apiKey !== 'your_api_key_here'
+    firebaseConfig.apiKey !== 'your_api_key_here' &&
+    firebaseConfig.apiKey !== 'AIzaSyAvTjHbX2PpC_i4WgsGhTXIRDiDSWPANrc' // Check if it's the actual key
   );
 };
+
+// Check if we're in development mode
+const isDev = process.env.NODE_ENV === 'development';
 
 // Singleton pattern to prevent multiple initializations in Next.js dev mode
 let app: FirebaseApp | undefined;
@@ -39,6 +43,7 @@ export const isFirebaseConfigured = isFirebaseConfigValid();
 if (typeof window !== 'undefined' && isFirebaseConfigured) {
   try {
     if (!getApps().length) {
+      console.log('Initializing Firebase app...');
       app = initializeApp(firebaseConfig);
       
       // Initialize Firestore with modern persistent cache only ONCE
@@ -48,31 +53,61 @@ if (typeof window !== 'undefined' && isFirebaseConfigured) {
             tabManager: persistentMultipleTabManager() 
           })
         });
+        console.log('Firestore initialized with persistent cache');
       } catch (firestoreError) {
         console.error("Error initializing Firestore with cache:", firestoreError);
         // Fallback to standard Firestore without cache
         db = getFirestore(app);
+        console.log('Firestore initialized without cache (fallback)');
       }
     } else {
+      console.log('Using existing Firebase app');
       app = getApp();
       try {
         db = getFirestore(app);
+        console.log('Firestore instance retrieved');
       } catch (firestoreError) {
         console.error("Error getting Firestore instance:", firestoreError);
       }
     }
 
     if (app) {
+      // Initialize Auth
       auth = getAuth(app);
-      storage = getStorage(app);
+      console.log('Auth initialized');
       
-      // Initialize RTDB only if URL is valid
-      if (firebaseConfig.databaseURL && firebaseConfig.databaseURL.startsWith('https://') && firebaseConfig.databaseURL !== 'https://your-database-url.firebaseio.com') {
+      // Initialize Storage
+      storage = getStorage(app);
+      console.log('Storage initialized');
+      
+      // Initialize RTDB only if URL is valid and exists
+      if (firebaseConfig.databaseURL && 
+          firebaseConfig.databaseURL.startsWith('https://') && 
+          firebaseConfig.databaseURL !== 'https://your-database-url.firebaseio.com' &&
+          firebaseConfig.databaseURL !== 'https://fintrack-tpsds-default-rtdb.firebaseio.com') {
         try {
           rtdb = getDatabase(app);
+          console.log('Realtime Database initialized');
         } catch (error) {
           console.warn("RTDB Init failed - continuing without realtime database:", error);
           rtdb = null;
+        }
+      } else {
+        console.log('No valid databaseURL provided, skipping RTDB initialization');
+        rtdb = null;
+      }
+
+      // Optional: Connect to emulators in development
+      if (isDev && typeof window !== 'undefined' && window.location.hostname === 'localhost') {
+        try {
+          // Uncomment these if you want to use Firebase emulators locally
+          // connectFirestoreEmulator(db, 'localhost', 8080);
+          // connectAuthEmulator(auth, 'http://localhost:9099');
+          // connectStorageEmulator(storage, 'localhost', 9199);
+          // if (rtdb) connectDatabaseEmulator(rtdb, 'localhost', 9000);
+          console.log('Development mode: Emulators available (commented out)');
+        } catch (emulatorError) {
+          console.warn('Failed to connect to emulators:', emulatorError);
         }
       }
     }
@@ -81,10 +116,16 @@ if (typeof window !== 'undefined' && isFirebaseConfigured) {
   }
 } else if (typeof window !== 'undefined') {
   console.warn('Firebase configuration is missing or invalid. Check your environment variables.');
+  console.warn('Current config status:', {
+    hasApiKey: !!firebaseConfig.apiKey,
+    hasProjectId: !!firebaseConfig.projectId,
+    hasAuthDomain: !!firebaseConfig.authDomain,
+    apiKeyValue: firebaseConfig.apiKey ? `${firebaseConfig.apiKey.substring(0, 10)}...` : 'missing',
+  });
 }
 
 // Helper function to check if Firebase is initialized
-export const isFirebaseInitialized = () => {
+export const isFirebaseInitialized = (): boolean => {
   return !!(app && db && auth && storage);
 };
 
@@ -112,4 +153,32 @@ export const getStorageInstance = (): FirebaseStorage => {
   return storage;
 };
 
+// Helper function to get RTDB with error handling
+export const getRtdb = (): Database | null => {
+  return rtdb;
+};
+
+// Helper function to wait for Firebase initialization
+export const waitForFirebase = (timeout: number = 10000): Promise<boolean> => {
+  return new Promise((resolve) => {
+    if (isFirebaseInitialized()) {
+      resolve(true);
+      return;
+    }
+    
+    const startTime = Date.now();
+    const interval = setInterval(() => {
+      if (isFirebaseInitialized()) {
+        clearInterval(interval);
+        resolve(true);
+      } else if (Date.now() - startTime > timeout) {
+        clearInterval(interval);
+        console.error('Firebase initialization timeout');
+        resolve(false);
+      }
+    }, 100);
+  });
+};
+
+// Export all instances
 export { app, auth, storage, rtdb, db };
