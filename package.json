@@ -11,12 +11,11 @@
     "start:standalone": "node .next/standalone/server.js",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "postbuild": "npm run copy-static || echo 'Skipping copy-static on Vercel'",
-    "copy-static": "if not exist .next\\standalone\\public mkdir .next\\standalone\\public && xcopy /E /I /Y public\\* .next\\standalone\\public\\ && if not exist .next\\standalone\\.next\\static mkdir .next\\standalone\\.next\\static && xcopy /E /I /Y .next\\static\\* .next\\standalone\\.next\\static\\",
     "vercel-build": "next build",
-    "clean": "rmdir /S /Q .next 2>nul & rmdir /S /Q node_modules\\.cache 2>nul",
-    "deploy": "npm run build && npm run postbuild && echo ✅ Build complete! Upload .next\\standalone folder to cPanel",
-    "deploy:zip": "npm run build && npm run postbuild && powershell Compress-Archive -Path .next\\standalone\\* -DestinationPath deploy.zip -Force && echo ✅ deploy.zip created successfully!"
+    "postinstall": "patch-package",
+    "clean": "rm -rf .next node_modules/.cache",
+    "deploy": "npm run build && echo 'Build complete! Upload .next/standalone folder to cPanel'",
+    "deploy:zip": "npm run build && zip -r deploy.zip .next/standalone && echo 'deploy.zip created successfully!'"
   },
   "dependencies": {
     "@genkit-ai/googleai": "^1.14.0",
