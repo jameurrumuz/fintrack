@@ -205,7 +205,7 @@ function NewLoanForm({ partyId, accounts }: { partyId: string, accounts: Account
             else if (paymentFrequency === 'daily') currentDate = addDays(currentDate, 1);
         }
         setGeneratedSchedule(schedule);
-    }, [principal, interestRate, tenure, firstEmiDate, paymentFrequency, calculationMode, repaymentType, installmentAmount, totalInstallments, form]);
+    }, [principal, interestRate, tenure, firstEmiDate, paymentFrequency, calculationMode, repaymentType, installmentAmount, totalInstallments]);
 
     const handleLoanSubmit = async (data: LoanFormValues) => {
         try {
@@ -244,7 +244,9 @@ function NewLoanForm({ partyId, accounts }: { partyId: string, accounts: Account
     );
 }
 
-function PartyLedgerPageContent({ partyId }: { partyId: string }) {
+function PartyLedgerPage({ params }: { params: Promise<{ partyId: string }> }) {
+  const resolvedParams = use(params);
+  const partyId = resolvedParams.partyId;
   const router = useRouter();
   const { toast } = useToast();
   const invoiceRef = useRef<HTMLDivElement>(null);
@@ -304,12 +306,11 @@ function PartyLedgerPageContent({ partyId }: { partyId: string }) {
         subscribeToInventoryItems(setInventoryItems, console.error);
         setTimeout(() => setLoading(false), 500);
     }
-  }, [partyId, toast]);
+  }, [partyId]);
 
   const { groupedTransactions, currentBalance, openingBalance, finalBalanceInTable, partyAnalysis, soldProductsSummary } = useMemo(() => {
     const enabledTxs = transactions.filter(t => t.enabled);
     
-    // Sort oldest first for running balance
     const sortedAll = [...enabledTxs].sort((a, b) => {
         const dateA = new Date(a.date).getTime();
         const dateB = new Date(b.date).getTime();
@@ -342,10 +343,8 @@ function PartyLedgerPageContent({ partyId }: { partyId: string }) {
     const grouped: { [key: string]: any[] } = {};
     filtered.forEach(t => { if(!grouped[t.date]) grouped[t.date] = []; grouped[t.date].push(t); });
     
-    // For UI Display, sort days Ascending
     const groupedArray = Object.entries(grouped).sort(([dateA], [dateB]) => new Date(dateA).getTime() - new Date(dateB).getTime()); 
 
-    // --- Analysis ---
     let totalReceive = 0;
     let totalGive = 0;
     const productSales = new Map<string, { name: string, quantity: number }>();
@@ -397,7 +396,10 @@ function PartyLedgerPageContent({ partyId }: { partyId: string }) {
     return '';
   }, [accounts]);
 
-  const transactionForm = useForm<FormValues>({ resolver: zodResolver(partyTransactionSchema), defaultValues: { date: new Date(), type: 'receive', amount: '' as any, accountId: defaultAccountId, via: '', charge: 0, chargeVia: '' } });
+  const transactionForm = useForm<FormValues>({ 
+    resolver: zodResolver(partyTransactionSchema), 
+    defaultValues: { date: new Date(), type: 'receive', amount: '' as any, accountId: defaultAccountId, via: '', charge: 0, chargeVia: '' } 
+  });
 
   const handleAddTransaction = async (data: FormValues) => {
     if (!party) return;
@@ -405,6 +407,7 @@ function PartyLedgerPageContent({ partyId }: { partyId: string }) {
         await addTxService({ ...data, date: formatFns(data.date, 'yyyy-MM-dd'), partyId: party.id, enabled: true });
         toast({ title: 'Success' });
         setIsFormOpen(false);
+        transactionForm.reset();
     } catch (e: any) { toast({ variant: 'destructive', title: 'Error', description: e.message }); }
   };
 
@@ -796,13 +799,10 @@ function PartyLedgerPageContent({ partyId }: { partyId: string }) {
   );
 }
 
-export default function PartyLedgerPage({ params }: { params: Promise<{ partyId: string }> }) {
-  const resolvedParams = use(params);
-  const partyId = resolvedParams.partyId;
-  
+export default function PartyLedgerPageWrapper({ params }: { params: Promise<{ partyId: string }> }) {
   return (
     <Suspense fallback={<div className="flex justify-center items-center h-screen"><Loader2 className="animate-spin text-primary" /></div>}>
-      <PartyLedgerPageContent partyId={partyId} />
+      <PartyLedgerPage params={params} />
     </Suspense>
   );
 }
