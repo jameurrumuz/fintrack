@@ -2,45 +2,41 @@
 
 import React, { Suspense, useEffect, useMemo, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import Image from 'next/image';
 import { getDoc, doc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import type { Transaction, Party, Account, InventoryItem, TransactionVia, AppSettings, Loan, AmortizationEntry, SheetRow, SmsBlocklistRule } from '@/types';
+import type { Transaction, Party, Account, InventoryItem, AppSettings, Loan, AmortizationEntry, SheetRow, SmsBlocklistRule } from '@/types';
 import { subscribeToAccounts } from '@/services/accountService';
-import { subscribeToTransactionsForParty, updateTransaction, addTransaction as addTxService, toggleTransaction, recalculateBalancesFromTransaction, subscribeToAllTransactions, deleteTransaction } from '@/services/transactionService';
-import { getOldLedgerData, subscribeToParties, updateParty, saveLoanAndUpdateParty, deleteLoan, markEmiAsPaid, updateLoanDetails, editEmiPaymentTransactions, deleteEmiPayment } from '@/services/partyService';
+import { subscribeToTransactionsForParty, updateTransaction, addTransaction as addTxService, toggleTransaction, recalculateBalancesFromTransaction, subscribeToAllTransactions } from '@/services/transactionService';
+import { getOldLedgerData, subscribeToParties, saveLoanAndUpdateParty, deleteLoan, markEmiAsPaid, updateLoanDetails, editEmiPaymentTransactions, deleteEmiPayment } from '@/services/partyService';
 import { getAppSettings } from '@/services/settingsService';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardFooter } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow, TableFooter } from '@/components/ui/table';
 import { useToast } from '@/hooks/use-toast';
-import { useForm, Controller } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import * as z from 'zod';
 import { formatAmount, formatDate, getPartyBalanceEffect, cn } from '@/lib/utils';
-import { Loader2, ArrowLeft, Printer, MoreVertical, Edit, Trash2, ShoppingCart, RefreshCcw, Landmark, Briefcase, MessageSquare, Share2, ArrowDown, ArrowUp, Plus, Circle, CheckCircle, FileUp, Phone, Receipt, Eye, Search, FileText, X, ChevronsUpDown, Check, TrendingUp, TrendingDown, Clock, User } from 'lucide-react';
+import { Loader2, ArrowLeft, Printer, MoreVertical, Edit, Trash2, ShoppingCart, RefreshCcw, Landmark, Briefcase, MessageSquare, Share2, ArrowDown, ArrowUp, FileUp, Phone, Search } from 'lucide-react';
 import Link from 'next/link';
 import { Badge } from '@/components/ui/badge';
-import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator } from '@/components/ui/dropdown-menu';
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose, DialogDescription, DialogTrigger } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from '@/components/ui/dropdown-menu';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
 import { SidebarInset } from '@/components/ui/sidebar';
-import { format as formatFns, parseISO, isPast, addMonths, addDays, differenceInDays, differenceInHours, isValid } from 'date-fns';
+import { format as formatFns, addDays, addMonths } from 'date-fns';
 import { DatePicker } from '@/components/ui/date-picker';
 import PartyTransactionEditDialog from '@/components/PartyTransactionEditDialog';
 import PaymentReceiptDialog from '@/components/PaymentReceiptDialog';
 import InvoiceDialog from '@/components/pos/InvoiceDialog';
 import { subscribeToInventoryItems } from '@/services/inventoryService';
 import { fetchSheetData } from '@/services/smsSyncService';
-import { Separator } from '@/components/ui/separator';
-import QRCode from 'qrcode';
 
 const partyTransactionSchema = z.object({
   date: z.date(),
@@ -69,18 +65,12 @@ const loanFormSchema = z.object({
   principal: z.coerce.number().positive(),
   interestRate: z.coerce.number().min(0).optional(),
   tenure: z.coerce.number().positive().optional(),
-  totalInstallments: z.coerce.number().positive().optional(),
-  installmentAmount: z.coerce.number().positive().optional(),
-  tenureUnit: z.enum(['days', 'weeks', 'months']).optional(),
   startDate: z.string().min(1),
   firstEmiDate: z.string().min(1),
-  paymentFrequency: z.enum(['daily', 'weekly', 'fortnightly', 'monthly', 'quarterly']),
-  interestType: z.enum(['no_interest', 'simple', 'compound']),
-  repaymentType: z.enum(['principal_interest', 'interest_only', 'principal_interest_custom']),
+  paymentFrequency: z.enum(['daily', 'weekly', 'monthly']),
+  repaymentType: z.enum(['principal_interest', 'interest_only']),
   processingFee: z.coerce.number().min(0).optional(),
-  disbursementType: z.enum(['receive_in_account', 'credit_only']),
   disbursementAccountId: z.string().optional(),
-  calculationMode: z.enum(['rate', 'emi']).default('rate'),
 });
 
 type LoanFormValues = z.infer<typeof loanFormSchema>;
@@ -170,46 +160,16 @@ function NewLoanForm({ partyId, accounts }: { partyId: string, accounts: Account
     const form = useForm<LoanFormValues>({
         resolver: zodResolver(loanFormSchema),
         defaultValues: {
-            principal: 100000, interestRate: 10, tenure: 12, tenureUnit: 'months',
+            principal: 100000, interestRate: 10, tenure: 12,
             startDate: formatFns(new Date(), 'yyyy-MM-dd'),
             firstEmiDate: formatFns(addDays(new Date(), 30), 'yyyy-MM-dd'),
-            paymentFrequency: 'monthly', interestType: 'simple', repaymentType: 'principal_interest',
-            disbursementType: 'receive_in_account', calculationMode: 'rate',
+            paymentFrequency: 'monthly', repaymentType: 'principal_interest',
         }
     });
 
-    const [generatedSchedule, setGeneratedSchedule] = useState<AmortizationEntry[]>([]);
-    const { principal, interestRate, tenure, firstEmiDate, paymentFrequency, calculationMode, repaymentType, installmentAmount, totalInstallments } = form.watch();
-
-    useEffect(() => {
-        if (!principal || principal <= 0) return setGeneratedSchedule([]);
-        let schedule: AmortizationEntry[] = [];
-        let numPayments = tenure || 0;
-        let emi = 0;
-        if (repaymentType === 'principal_interest') {
-            if (calculationMode === 'rate' && tenure) {
-                emi = (principal + (principal * (interestRate || 0) / 100 * (tenure / 12))) / tenure;
-            } else if (calculationMode === 'emi' && installmentAmount) {
-                emi = installmentAmount;
-                numPayments = totalInstallments || Math.ceil(principal / emi);
-            }
-        }
-        let currentDate = new Date(firstEmiDate);
-        let remainingBalance = principal;
-        for (let i = 1; i <= numPayments; i++) {
-            const p = emi;
-            remainingBalance -= p;
-            schedule.push({ installment: i, dueDate: currentDate.toISOString().split('T')[0], payment: emi, principal: p, interest: 0, remainingBalance: remainingBalance > 0 ? remainingBalance : 0, status: 'unpaid' });
-            if (paymentFrequency === 'monthly') currentDate = addMonths(currentDate, 1);
-            else if (paymentFrequency === 'weekly') currentDate = addDays(currentDate, 7);
-            else if (paymentFrequency === 'daily') currentDate = addDays(currentDate, 1);
-        }
-        setGeneratedSchedule(schedule);
-    }, [principal, interestRate, tenure, firstEmiDate, paymentFrequency, calculationMode, repaymentType, installmentAmount, totalInstallments]);
-
     const handleLoanSubmit = async (data: LoanFormValues) => {
         try {
-            await saveLoanAndUpdateParty(partyId, { ...data, loanNumber: `L-${Date.now()}`, schedule: generatedSchedule, isActive: true });
+            await saveLoanAndUpdateParty(partyId, { ...data, loanNumber: `L-${Date.now()}`, schedule: [], isActive: true });
             toast({ title: "Loan Created!" });
             form.reset();
         } catch (error: any) { toast({ variant: "destructive", title: "Error", description: error.message }); }
@@ -244,9 +204,8 @@ function NewLoanForm({ partyId, accounts }: { partyId: string, accounts: Account
     );
 }
 
-function PartyLedgerPage({ params }: { params: Promise<{ partyId: string }> }) {
-  const resolvedParams = use(params);
-  const partyId = resolvedParams.partyId;
+export default function PartyLedgerPage({ params }: { params: { partyId: string } }) {
+  const partyId = params.partyId;
   const router = useRouter();
   const { toast } = useToast();
   const invoiceRef = useRef<HTMLDivElement>(null);
@@ -283,10 +242,6 @@ function PartyLedgerPage({ params }: { params: Promise<{ partyId: string }> }) {
   const [isSmsDialogOpen, setIsSmsDialogOpen] = useState(false);
   const [smsData, setSmsData] = useState<SheetRow[]>([]);
   const [smsLoading, setSmsLoading] = useState(false);
-  
-  const [doneSms, setDoneSms] = useState<SheetRow[]>([]);
-  const [blocklistRules, setBlocklistRules] = useState<SmsBlocklistRule[]>([]);
-  const [selectedSms, setSelectedSms] = useState<Set<string>>(new Set());
   const [sendSms, setSendSms] = useState(true);
 
   useEffect(() => {
@@ -294,11 +249,7 @@ function PartyLedgerPage({ params }: { params: Promise<{ partyId: string }> }) {
         setLoading(true);
         getDoc(doc(db, 'parties', partyId)).then(snap => { if (snap.exists()) setParty({ id: snap.id, ...snap.data() } as Party); });
         getOldLedgerData(partyId).then(data => { if (data) setOldLedger(data); });
-        getAppSettings().then(settings => {
-            setAppSettings(settings);
-            setDoneSms(settings?.doneSms || []);
-            setBlocklistRules(settings?.smsBlocklist || []);
-        });
+        getAppSettings().then(settings => setAppSettings(settings));
         subscribeToTransactionsForParty(partyId, setTransactions, console.error);
         subscribeToAllTransactions(setAllTransactions, console.error);
         subscribeToAccounts(setAccounts, console.error);
@@ -315,9 +266,7 @@ function PartyLedgerPage({ params }: { params: Promise<{ partyId: string }> }) {
         const dateA = new Date(a.date).getTime();
         const dateB = new Date(b.date).getTime();
         if (dateA !== dateB) return dateA - dateB;
-        const timeA = (a as any).createdAt ? new Date((a as any).createdAt).getTime() : 0;
-        const timeB = (b as any).createdAt ? new Date((b as any).createdAt).getTime() : 0;
-        return timeA - timeB;
+        return 0;
     });
     
     let running = 0;
@@ -350,7 +299,7 @@ function PartyLedgerPage({ params }: { params: Promise<{ partyId: string }> }) {
     const productSales = new Map<string, { name: string, quantity: number }>();
 
     enabledTxs.forEach(tx => {
-        const isDebit = ['give', 'spent', 'purchase', 'purchase_return', 'credit_give', 'credit_sale', 'sale'].includes(tx.type);
+        const isDebit = ['give', 'spent', 'purchase', 'credit_give', 'credit_sale', 'sale'].includes(tx.type);
         const isCredit = ['receive', 'credit_purchase', 'sale_return', 'income', 'credit_income'].includes(tx.type);
 
         if (isCredit) totalReceive += tx.amount;
@@ -796,13 +745,5 @@ function PartyLedgerPage({ params }: { params: Promise<{ partyId: string }> }) {
             </DialogContent>
         </Dialog>
     </SidebarInset>
-  );
-}
-
-export default function PartyLedgerPageWrapper({ params }: { params: Promise<{ partyId: string }> }) {
-  return (
-    <Suspense fallback={<div className="flex justify-center items-center h-screen"><Loader2 className="animate-spin text-primary" /></div>}>
-      <PartyLedgerPage params={params} />
-    </Suspense>
   );
 }
