@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Firebase Auth Error Solution</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            line-height: 1.6;
+            min-height: 100vh;
+            padding: 20px;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+        
+        header {
+            text-align: center;
+            padding: 30px 0;
+            color: white;
+        }
+        
+        header h1 {
+            font-size: 2.8rem;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+        }
+        
+        header p {
+            font-size: 1.2rem;
+            max-width: 800px;
+            margin: 0 auto;
+            opacity: 0.9;
+        }
+        
+        .card {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+            padding: 25px;
+            margin-bottom: 25px;
+            transition: transform 0.3s ease;
+        }
+        
+        .card:hover {
+            transform: translateY(-5px);
+        }
+        
+        .card-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 20px;
+            border-bottom: 2px solid #f1f1f1;
+            padding-bottom: 15px;
+        }
+        
+        .card-header i {
+            font-size: 24px;
+            margin-right: 15px;
+            color: #667eea;
+        }
+        
+        .card-header h2 {
+            font-size: 1.8rem;
+            color: #333;
+        }
+        
+        .solution-content {
+            padding: 10px;
+        }
+        
+        .solution-content h3 {
+            color: #667eea;
+            margin: 15px 0 10px;
+        }
+        
+        .solution-content p {
+            margin-bottom: 15px;
+            font-size: 1.05rem;
+        }
+        
+        .code-block {
+            background: #2d2d2d;
+            color: #f8f8f2;
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            overflow-x: auto;
+            font-family: 'Consolas', monospace;
+        }
+        
+        .code-keyword {
+            color: #ff79c6;
+        }
+        
+        .code-string {
+            color: #f1fa8c;
+        }
+        
+        .code-comment {
+            color: #6272a4;
+        }
+        
+        .steps {
+            margin: 20px 0;
+            padding-left: 20px;
+        }
+        
+        .steps li {
+            margin-bottom: 10px;
+            font-size: 1.05rem;
+        }
+        
+        .screenshot {
+            text-align: center;
+            margin: 20px 0;
+        }
+        
+        .screenshot img {
+            max-width: 100%;
+            border: 1px solid #ddd;
+            border-radius: 8px;
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+        
+        .caption {
+            font-style: italic;
+            margin-top: 8px;
+            color: #666;
+        }
+        
+        .important {
+            background: #fff9e6;
+            border-left: 4px solid #ffc107;
+            padding: 15px;
+            margin: 20px 0;
+            border-radius: 4px;
+        }
+        
+        .button {
+            display: inline-block;
+            background: #667eea;
+            color: white;
+            padding: 12px 25px;
+            border-radius: 50px;
+            text-decoration: none;
+            font-weight: 600;
+            margin-top: 10px;
+            transition: all 0.3s ease;
+            border: none;
+            cursor: pointer;
+        }
+        
+        .button:hover {
+            background: #5a6fd5;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.1);
+        }
+        
+        footer {
+            text-align: center;
+            color: white;
+            padding: 30px 0;
+            margin-top: 40px;
+            opacity: 0.8;
+        }
+        
+        @media (max-width: 768px) {
+            .card-header h2 {
+                font-size: 1.5rem;
+            }
+            
+            header h1 {
+                font-size: 2.2rem;
+            }
+            
+            header p {
+                font-size: 1rem;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>Firebase Admin Restricted Operation Error</h1>
+            <p>Learn how to fix the "auth/admin-restricted-operation" error in your Firebase application</p>
+        </header>
+        
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-exclamation-triangle"></i>
+                <h2>Understanding the Error</h2>
+            </div>
+            <div class="solution-content">
+                <p>The <strong>FirebaseError: auth/admin-restricted-operation</strong> typically occurs when Firebase Authentication is configured to restrict certain operations. This often happens when the Anonymous sign-in provider is disabled in your Firebase project settings.</p>
+                
+                <div class="code-block">
+                    <span class="code-comment">// Example error message:</span><br>
+                    FirebaseError: Firebase: Error (auth/admin-restricted-operation).<br>
+                    at createErrorInternal (https://...firebase-auth.js:542:41)<br>
+                    at _fail (https://...firebase-auth.js:507:11)<br>
+                    at _performFetchWithErrorHandling (https://...firebase-auth.js:968:17)
+                </div>
+                
+                <p>This error can also occur due to incorrect security rules, API restrictions, or domain authorization issues.</p>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-wrench"></i>
+                <h2>Solution 1: Enable Anonymous Sign-in</h2>
+            </div>
+            <div class="solution-content">
+                <p>The most common solution is to enable Anonymous authentication in your Firebase project:</p>
+                
+                <ol class="steps">
+                    <li>Go to the <a href="https://console.firebase.google.com/" target="_blank">Firebase Console</a></li>
+                    <li>Select your project</li>
+                    <li>Navigate to <strong>Authentication</strong> → <strong>Sign-in method</strong></li>
+                    <li>Find the <strong>Anonymous</strong> provider and click on it</li>
+                    <li>Enable Anonymous sign-in and click <strong>Save</strong></li>
+                </ol>
+                
+                <div class="screenshot">
+                    <div style="background:#f1f1f1; height:250px; display:flex; align-items:center; justify-content:center; border-radius:8px;">
+                        <p style="color:#666;">Screenshot of Firebase Console showing Anonymous sign-in option</p>
+                    </div>
+                    <p class="caption">Anonymous sign-in option in Firebase Console</p>
+                </div>
+                
+                <div class="important">
+                    <p><strong>Important:</strong> After making changes in the Firebase Console, it may take a few minutes for the changes to propagate.</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-code"></i>
+                <h2>Solution 2: Verify Your Implementation</h2>
+            </div>
+            <div class="solution-content">
+                <p>Ensure your code follows the correct implementation for anonymous authentication:</p>
+                
+                <div class="code-block">
+                    <span class="code-comment">// Import the necessary Firebase modules</span><br>
+                    <span class="code-keyword">import</span> { initializeApp } <span class="code-keyword">from</span> <span class="code-string">"firebase/app"</span>;<br>
+                    <span class="code-keyword">import</span> { getAuth, signInAnonymously } <span class="code-keyword">from</span> <span class="code-string">"firebase/auth"</span>;<br><br>
+                    
+                    <span class="code-comment">// Your Firebase configuration</span><br>
+                    <span class="code-keyword">const</span> firebaseConfig = {<br>
+                    &nbsp;&nbsp;apiKey: <span class="code-string">"your-api-key"</span>,<br>
+                    &nbsp;&nbsp;authDomain: <span class="code-string">"your-project.firebaseapp.com"</span>,<br>
+                    &nbsp;&nbsp;projectId: <span class="code-string">"your-project-id"</span>,<br>
+                    &nbsp;&nbsp;storageBucket: <span class="code-string">"your-project.appspot.com"</span>,<br>
+                    &nbsp;&nbsp;messagingSenderId: <span class="code-string">"123456789"</span>,<br>
+                    &nbsp;&nbsp;appId: <span class="code-string">"your-app-id"</span><br>
+                    };<br><br>
+                    
+                    <span class="code-comment">// Initialize Firebase</span><br>
+                    <span class="code-keyword">const</span> app = initializeApp(firebaseConfig);<br>
+                    <span class="code-keyword">const</span> auth = getAuth(app);<br><br>
+                    
+                    <span class="code-comment">// Sign in anonymously</span><br>
+                    signInAnonymously(auth)<br>
+                    &nbsp;&nbsp;.then((userCredential) => {<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;<span class="code-comment">// Signed in successfully</span><br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;<span class="code-keyword">const</span> user = userCredential.user;<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;console.log(<span class="code-string">"Anonymous user ID:"</span>, user.uid);<br>
+                    &nbsp;&nbsp;})<br>
+                    &nbsp;&nbsp;.catch((error) => {<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;<span class="code-keyword">const</span> errorCode = error.code;<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;<span class="code-keyword">const</span> errorMessage = error.message;<br>
+                    &nbsp;&nbsp;&nbsp;&nbsp;console.error(<span class="code-string">"Authentication error:"</span>, errorCode, errorMessage);<br>
+                    &nbsp;&nbsp;});
+                </div>
+                
+                <p>Make sure your Firebase configuration object is correct and matches your project settings.</p>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-cog"></i>
+                <h2>Solution 3: Check Additional Settings</h2>
+            </div>
+            <div class="solution-content">
+                <h3>Authorized Domains</h3>
+                <p>Ensure your domain is authorized in the Firebase Console:</p>
+                <ol class="steps">
+                    <li>Go to Firebase Console → Authentication → Settings</li>
+                    <li>Under "Authorized domains", make sure your domain is listed</li>
+                    <li>Add any missing domains (localhost is included by default for testing)</li>
+                </ol>
+                
+                <h3>API Restrictions</h3>
+                <p>Check if there are any API restrictions on your API key:</p>
+                <ol class="steps">
+                    <li>Go to the <a href="https://console.cloud.google.com/" target="_blank">Google Cloud Console</a></li>
+                    <li>Select your project</li>
+                    <li>Navigate to <strong>APIs & Services</strong> → <strong>Credentials</strong></li>
+                    <li>Find your API key and check if there are any restrictions that might be blocking authentication</li>
+                </ol>
+                
+                <h3>Security Rules</h3>
+                <p>Check your Firebase Security Rules to ensure they allow the operations you're trying to perform.</p>
+                
+                <div class="important">
+                    <p><strong>Note:</strong> If you're testing locally, make sure you're using http://localhost or http://127.0.0.1 as these are authorized by default in Firebase projects.</p>
+                </div>
+            </div>
+        </div>
+        
+        <div class="card">
+            <div class="card-header">
+                <i class="fas fa-question-circle"></i>
+                <h2>Still Need Help?</h2>
+            </div>
+            <div class="solution-content">
+                <p>If you're still experiencing the issue after trying these solutions:</p>
+                
+                <ol class="steps">
+                    <li>Check the Firebase Status Dashboard for any ongoing incidents</li>
+                    <li>Make sure you're using the latest version of the Firebase SDK</li>
+                    <li>Try testing in incognito mode or a different browser to rule out extension conflicts</li>
+                    <li>Check your browser's console for any additional error messages</li>
+                </ol>
+                
+                <p>For more information, visit the <a href="https://firebase.google.com/docs/auth" target="_blank">Firebase Authentication documentation</a>.</p>
+                
+                <a href="https://stackoverflow.com/questions/tagged/firebase" class="button" target="_blank">
+                    <i class="fab fa-stack-overflow"></i> Ask on Stack Overflow
+                </a>
+            </div>
+        </div>
+        
+        <footer>
+            <p>© 2023 Firebase Error Solutions | Created with ❤️ for developers</p>
+        </footer>
+    </div>
+</body>
+</html>

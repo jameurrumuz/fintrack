@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Firebase Firestore Setup Guide</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; }
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+        .step-card {
+            background-color: white;
+            border-radius: 0.75rem;
+            border: 1px solid #e5e7eb;
+            box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px -1px rgba(0, 0, 0, 0.1);
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+        .step-card h3 {
+            font-size: 1.25rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+        }
+        .step-card p {
+            color: #4b5563;
+        }
+        .step-card img {
+            border-radius: 0.5rem;
+            border: 1px solid #d1d5db;
+            margin-top: 1rem;
+            max-width: 100%;
+            height: auto;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 text-gray-800">
+
+    <div class="container mx-auto p-4 md:p-8 max-w-4xl">
+        <header class="text-center mb-10">
+            <h1 class="text-4xl font-bold text-indigo-600">Firebase Firestore Setup Guide</h1>
+            <p class="mt-2 text-lg text-gray-600">Follow these steps to correctly set up your database and fix connection errors.</p>
+        </header>
+
+        <main>
+            <div class="step-card">
+                <h3>Step 1: Open Your Firebase Project</h3>
+                <p>Go to the <a href="https://console.firebase.google.com/" target="_blank" class="text-indigo-600 underline">Firebase Console</a> and select the project you are using for this application.</p>
+            </div>
+
+            <div class="step-card">
+                <h3>Step 2: Go to Firestore Database</h3>
+                <p>In the left-hand menu, under "Build", click on <strong>Firestore Database</strong>.</p>
+                <img src="https://firebasestudio.b-cdn.net/fin-plan/step-2.png" alt="Go to Firestore Database">
+            </div>
+
+            <div class="step-card">
+                <h3>Step 3: Create Database</h3>
+                <p>If you see a "Create database" button, click it. This means you haven't created a database yet, which is the cause of the error.</p>
+                <img src="https://firebasestudio.b-cdn.net/fin-plan/step-3.png" alt="Create Database button">
+            </div>
+
+            <div class="step-card">
+                <h3>Step 4: Start in Test Mode</h3>
+                <p>When asked, select <strong>"Start in test mode"</strong>. This sets up security rules that allow your app to read and write data. Click "Next".</p>
+                <p class="text-sm text-yellow-600 mt-2"><strong>Note:</strong> Test mode rules are only valid for 30 days. For a production app, you would need to set up more secure rules.</p>
+                <img src="https://firebasestudio.b-cdn.net/fin-plan/step-4.png" alt="Start in test mode">
+            </div>
+
+            <div class="step-card">
+                <h3>Step 5: Select Location</h3>
+                <p>You will be prompted to select a location for your database. Choose a location close to your users. Any location will work for now. Click "Enable".</p>
+                <img src="https://firebasestudio.b-cdn.net/fin-plan/step-5.png" alt="Select Firestore location">
+            </div>
+
+            <div class="step-card">
+                <h3>Step 6: Verify and Update Security Rules</h3>
+                <p>After the database is created, go to the <strong>"Rules"</strong> tab at the top.</p>
+                 <img src="https://firebasestudio.b-cdn.net/fin-plan/step-6.png" alt="Go to Rules tab">
+            </div>
+            
+             <div class="step-card">
+                <h3>Step 7: Edit and Publish Rules</h3>
+                <p>Ensure your rules look like the code block below. This rule allows anyone to read and write to your database. Make your changes and click <strong>"Publish"</strong>.</p>
+                <pre class="bg-gray-100 p-3 rounded-md text-sm mt-2"><code>rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}</code></pre>
+                 <img src="https://firebasestudio.b-cdn.net/fin-plan/step-7.png" alt="Edit and publish rules">
+            </div>
+
+            <div class="step-card">
+                <h3>Step 8: Refresh Your Application</h3>
+                <p>Once you have published the rules, go back to your application and refresh the page. The error should now be resolved.</p>
+            </div>
+        </main>
+    </div>
+
+</body>
+</html>

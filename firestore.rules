@@ -1,0 +1,104 @@
+
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Allow public access to main app collections.
+    // This is a temporary, permissive rule for development.
+    // For production, you should implement user authentication and secure these rules.
+    match /transactions/{document=**} {
+      allow read, write: if true;
+    }
+    match /parties/{document=**} {
+      allow read, write: if true;
+    }
+    match /accounts/{document=**} {
+      allow read, write: if true;
+    }
+    match /inventory/{document=**} {
+      allow read, write: if true;
+    }
+     match /inventoryCategories/{document=**} {
+      allow read, write: if true;
+    }
+    match /inventoryMovements/{document=**} {
+      allow read, write: if true;
+    }
+    match /settings/{document=**} {
+      allow read, write: if true;
+    }
+    match /planEntries/{document=**} {
+      allow read, write: if true;
+    }
+     match /notes/{document=**} {
+      allow read, write: if true;
+    }
+    match /reminders/{document=**} {
+      allow read, write: if true;
+    }
+     match /old_data_ledgers/{document=**} {
+      allow read, write: if true;
+    }
+     match /custom_statements/{document=**} {
+      allow read, write: if true;
+    }
+     match /truck_gift_records/{document=**} {
+      allow read, write: if true;
+    }
+     match /tasks/{document=**} {
+      allow read, write: if true;
+    }
+     match /quotations/{document=**} {
+      allow read, write: if true;
+    }
+     match /audits/{document=**} {
+      allow read, write: if true;
+    }
+      match /profit_projects/{document=**} {
+      allow read, write: if true;
+    }
+    match /electricityMeters/{document=**} {
+      allow read, write: if true;
+    }
+    match /manual_invoices/{document=**} {
+      allow read, write: if true;
+    }
+    match /chats/{document=**} {
+      allow read, write: if true;
+    }
+    match /warisan_certificates/{document=**} {
+      allow read, write: if true;
+    }
+    match /trade_licences/{document=**} {
+      allow read, write: if true;
+    }
+    match /tours/{document=**} {
+      allow read, write: if true;
+    }
+    match /sms_logs/{document=**} {
+      allow read, write: if true;
+    }
+    match /log_records/{document=**} {
+      allow read, write: if true;
+    }
+    match /eliteClubMembers/{document=**} {
+      allow read, write: if true;
+    }
+    match /family_registrations/{document=**} {
+      allow read, write: if true;
+    }
+    
+    match /fitness_logs/{logId} {
+      allow read, delete: if request.auth != null && request.auth.uid == resource.data.user_id;
+      allow write: if request.auth != null && request.auth.uid == request.resource.data.user_id;
+    }
+
+
+    // Example of a more secure rule if you implement Firebase Authentication
+    match /users/{userId}/{documents=**} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+  }
+}
+
+    

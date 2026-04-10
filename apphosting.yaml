@@ -1,0 +1,12 @@
+# Settings to manage and configure a Firebase App Hosting backend.
+# https://firebase.google.com/docs/app-hosting/configure
+
+build:
+  image: us-central1-docker.pkg.dev/firestack-build/buildpacks/nodejs:22
+
+runConfig:
+  # Increase this value if you'd like to automatically spin up
+  # more instances in response to increased traffic.
+  maxInstances: 1
+  # Set the request timeout to 30 minutes (1800 seconds) to handle long-running tasks.
+  timeoutSeconds: 1800

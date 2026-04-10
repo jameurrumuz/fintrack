@@ -1,0 +1,154 @@
+<!DOCTYPE html>
+<html lang="bn">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Firebase Firestore Setup Guide</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif, "Apple Color Emoji", "Segoe UI Emoji", "Segoe UI Symbol";
+            line-height: 1.7;
+            color: #374151;
+            background-color: #f9fafb;
+        }
+        .container {
+            max-width: 800px;
+            margin: 2rem auto;
+            padding: 2rem;
+            background: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        h1, h2, h3 {
+            color: #111827;
+            font-weight: 700;
+        }
+        .step {
+            margin-bottom: 2.5rem;
+            padding-left: 1.5rem;
+            border-left: 4px solid #3b82f6;
+            position: relative;
+        }
+        .step-number {
+            position: absolute;
+            left: -18px;
+            top: 0;
+            background-color: #3b82f6;
+            color: white;
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 1.1rem;
+        }
+        code {
+            background-color: #e5e7eb;
+            padding: 0.2em 0.5em;
+            border-radius: 4px;
+            font-family: 'Fira Code', 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+        .note {
+            background-color: #eff6ff;
+            border-left: 4px solid #3b82f6;
+            padding: 1rem;
+            margin-top: 1rem;
+            border-radius: 4px;
+        }
+        img {
+            width: 100%;
+            max-width: 600px;
+            border-radius: 8px;
+            border: 1px solid #e5e7eb;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            margin-top: 1rem;
+            margin-bottom: 0.5rem;
+        }
+        .caption {
+            font-size: 0.875rem;
+            color: #6b7280;
+            text-align: center;
+            margin-top: 0.5rem;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+
+    <div class="container">
+        <h1 class="text-3xl font-bold text-center mb-2">ফায়ারবেস ফায়ারস্টোর সেটআপ গাইড</h1>
+        <p class="text-center text-gray-600 mb-8">কিভাবে আপনার ফায়ারবেস প্রজেক্টে Cloud Firestore চালু এবং কনফিগার করবেন।</p>
+
+        <div class="step">
+            <div class="step-number">১</div>
+            <h2 class="text-2xl font-semibold mb-2">ফায়ারবেস কনসোল খুলুন</h2>
+            <p>আপনার ওয়েব ব্রাউজারে <a href="https://console.firebase.google.com/" target="_blank" class="text-blue-600 hover:underline">Firebase Console</a> খুলুন এবং আপনার প্রোজেক্টটি সিলেক্ট করুন।</p>
+        </div>
+
+        <div class="step">
+            <div class="step-number">২</div>
+            <h2 class="text-2xl font-semibold mb-2">Firestore Database এ যান</h2>
+            <p>বাম দিকের মেনু থেকে 'Build' সেকশনের নিচে <strong>Firestore Database</strong> এ ক্লিক করুন।</p>
+            <img src="https://storage.googleapis.com/static.invertase.io/assets/images/firestore-1.png" alt="Firestore menu item in Firebase console">
+            <p class="caption">বাম দিকের মেনু থেকে Firestore Database সিলেক্ট করুন।</p>
+        </div>
+
+        <div class="step">
+            <div class="step-number">৩</div>
+            <h2 class="text-2xl font-semibold mb-2">Create Database বাটনে ক্লিক করুন</h2>
+            <p>যদি আপনার কোনো ডাটাবেস তৈরি করা না থাকে, তাহলে আপনি একটি 'Create database' বাটন দেখতে পাবেন। এটিতে ক্লিক করুন।</p>
+            <img src="https://storage.googleapis.com/static.invertase.io/assets/images/firestore-2.png" alt="Create database button in Firestore">
+            <p class="caption">'Create database' বাটনে ক্লিক করে শুরু করুন।</p>
+        </div>
+        
+        <div class="step">
+            <div class="step-number">৪</div>
+            <h2 class="text-2xl font-semibold mb-2">Test Mode নির্বাচন করুন</h2>
+            <p>আপনাকে Production mode অথবা Test mode এর মধ্যে একটি বেছে নিতে বলা হবে। অ্যাপটি ডেভেলপ করার সময় এবং সহজে ব্যবহারের জন্য <strong>Start in test mode</strong> নির্বাচন করুন।</p>
+            <div class="note">
+                <strong>গুরুত্বপূর্ণ:</strong> Test mode আপনার ডেটাবেসকে ৩০ দিনের জন্য খোলা রাখবে। প্রোডাকশন অ্যাপের জন্য আপনাকে পরে নিরাপত্তা বিধি (Security Rules) আপডেট করতে হবে।
+            </div>
+            <img src="https://storage.googleapis.com/static.invertase.io/assets/images/firestore-3.png" alt="Selecting test mode for Firestore">
+            <p class="caption">ডেভেলপমেন্টের সুবিধার জন্য Test mode নির্বাচন করুন।</p>
+        </div>
+
+        <div class="step">
+            <div class="step-number">৫</div>
+            <h2 class="text-2xl font-semibold mb-2">লোকেশন নির্বাচন করুন</h2>
+            <p>আপনার ব্যবহারকারীদের কাছাকাছি একটি লোকেশন নির্বাচন করুন। সাধারণত, ডিফল্ট লোকেশনটিই যথেষ্ট। এরপর 'Enable' বাটনে ক্লিক করুন।</p>
+            <img src="https://storage.googleapis.com/static.invertase.io/assets/images/firestore-4.png" alt="Selecting a location for Firestore">
+            <p class="caption">আপনার পছন্দমতো একটি লোকেশন নির্বাচন করুন।</p>
+        </div>
+        
+        <div class="step">
+            <div class="step-number">৬</div>
+            <h2 class="text-2xl font-semibold mb-2">নিরাপত্তা বিধি (Security Rules) আপডেট করুন</h2>
+            <p>ডাটাবেস তৈরি হয়ে গেলে, উপরের দিকে <strong>Rules</strong> ট্যাবে ক্লিক করুন।</p>
+            <p>সেখানে থাকা লেখাগুলো মুছে দিয়ে নিচের কোডটি পেস্ট করুন:</p>
+            <pre class="bg-gray-100 p-4 rounded-md text-sm whitespace-pre-wrap"><code>rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}</code></pre>
+            <p class="mt-2">এরপর <strong>Publish</strong> বাটনে ক্লিক করে পরিবর্তনটি সেভ করুন।</p>
+             <img src="https://storage.googleapis.com/static.invertase.io/assets/images/firestore-5.png" alt="Updating Firestore security rules">
+             <p class="caption">Rules ট্যাবে গিয়ে কোডটি পেস্ট করে Publish করুন।</p>
+        </div>
+
+        <div class="step">
+            <div class="step-number">🎉</div>
+            <h2 class="text-2xl font-semibold mb-2">সম্পন্ন!</h2>
+            <p>আপনার ফায়ারবেস ফায়ারস্টোর ডাটাবেস এখন ব্যবহারের জন্য প্রস্তুত। অ্যাপ্লিকেশনে ফিরে যান এবং আবার চেষ্টা করুন। এখন সংযোগ সফল হওয়া উচিত।</p>
+        </div>
+
+    </div>
+
+</body>
+</html>
