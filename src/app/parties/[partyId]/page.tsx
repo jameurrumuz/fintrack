@@ -1,7 +1,6 @@
-
 'use client';
 
-import React, { Suspense, useEffect, useMemo, useState, useRef, use } from 'react';
+import React, { Suspense, useEffect, useMemo, useState, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import { getDoc, doc } from 'firebase/firestore';
@@ -245,8 +244,7 @@ function NewLoanForm({ partyId, accounts }: { partyId: string, accounts: Account
     );
 }
 
-function PartyLedgerPageContent({ params: paramsPromise }: { params: Promise<{ partyId: string }> }) {
-  const { partyId } = use(paramsPromise);
+function PartyLedgerPageContent({ partyId }: { partyId: string }) {
   const router = useRouter();
   const { toast } = useToast();
   const invoiceRef = useRef<HTMLDivElement>(null);
@@ -270,6 +268,12 @@ function PartyLedgerPageContent({ params: paramsPromise }: { params: Promise<{ p
   const [isDateFilterEnabled, setIsDateFilterEnabled] = useState(false);
   const [includeInternalTx, setIncludeInternalTx] = useState(true);
   
+  const [editingTransaction, setEditingTransaction] = useState<Transaction | null>(null);
+  const [viewingReceipt, setViewingReceipt] = useState<Transaction | null>(null);
+  const [viewingInvoice, setViewingInvoice] = useState<Transaction | null>(null);
+  const [payingInstallment, setPayingInstallment] = useState<{ loanId: string, installment: AmortizationEntry, index: number } | null>(null);
+  const [editingLoan, setEditingLoan] = useState<Loan | null>(null);
+  
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [formType, setFormType] = useState<'give' | 'receive' | 'spent' | 'credit_give' | 'credit_income'>('give');
   const [isGiveOptionsOpen, setIsGiveOptionsOpen] = useState(false);
@@ -286,7 +290,11 @@ function PartyLedgerPageContent({ params: paramsPromise }: { params: Promise<{ p
   useEffect(() => {
     if (partyId) {
         setLoading(true);
-        getDoc(doc(db, 'parties', partyId)).then(snap => { if (snap.exists()) setParty({ id: snap.id, ...snap.data() } as Party); });
+        getDoc(doc(db, 'parties', partyId)).then(snap => { 
+            if (snap.exists()) setParty({ id: snap.id, ...snap.data() } as Party); 
+            else router.push('/parties');
+        }).catch(err => console.error(err));
+        
         getOldLedgerData(partyId).then(data => { if (data) setOldLedger(data); });
         getAppSettings().then(settings => {
             setAppSettings(settings);
@@ -300,7 +308,7 @@ function PartyLedgerPageContent({ params: paramsPromise }: { params: Promise<{ p
         subscribeToInventoryItems(setInventoryItems, console.error);
         setTimeout(() => setLoading(false), 500);
     }
-  }, [partyId, toast]);
+  }, [partyId, toast, router]);
 
   const { groupedTransactions, currentBalance, openingBalance, finalBalanceInTable, partyAnalysis, soldProductsSummary } = useMemo(() => {
     const enabledTxs = transactions.filter(t => t.enabled);
@@ -338,8 +346,7 @@ function PartyLedgerPageContent({ params: paramsPromise }: { params: Promise<{ p
     const grouped: { [key: string]: any[] } = {};
     filtered.forEach(t => { if(!grouped[t.date]) grouped[t.date] = []; grouped[t.date].push(t); });
     
-    // For UI Display, sort days Descending (Recent on top? NO, User asked for bottom). 
-    // Wait, the table renders them in order. If new should be at bottom, we sort days Ascending.
+    // For UI Display, sort days Ascending (oldest first)
     const groupedArray = Object.entries(grouped).sort(([dateA], [dateB]) => new Date(dateA).getTime() - new Date(dateB).getTime()); 
 
     // --- Analysis ---
@@ -349,7 +356,7 @@ function PartyLedgerPageContent({ params: paramsPromise }: { params: Promise<{ p
 
     enabledTxs.forEach(tx => {
         const effect = getPartyBalanceEffect(tx);
-        const isDebit = ['give', 'spent', 'purchase', 'purchase_return', 'credit_give', 'credit_sale', 'sale'].includes(tx.type); // Fixed rules
+        const isDebit = ['give', 'spent', 'purchase', 'purchase_return', 'credit_give', 'credit_sale', 'sale'].includes(tx.type);
         const isCredit = ['receive', 'credit_purchase', 'sale_return', 'income', 'credit_income'].includes(tx.type);
 
         if (isCredit) totalReceive += tx.amount;
@@ -395,7 +402,10 @@ function PartyLedgerPageContent({ params: paramsPromise }: { params: Promise<{ p
     return '';
   }, [accounts]);
 
-  const transactionForm = useForm<FormValues>({ resolver: zodResolver(partyTransactionSchema), defaultValues: { date: new Date(), type: 'receive', amount: '' as any, accountId: defaultAccountId, via: '', charge: 0, chargeVia: '' } });
+  const transactionForm = useForm<FormValues>({ 
+    resolver: zodResolver(partyTransactionSchema), 
+    defaultValues: { date: new Date(), type: 'receive', amount: '' as any, accountId: defaultAccountId, via: '', charge: 0, chargeVia: '' } 
+  });
 
   const handleAddTransaction = async (data: FormValues) => {
     if (!party) return;
@@ -403,6 +413,7 @@ function PartyLedgerPageContent({ params: paramsPromise }: { params: Promise<{ p
         await addTxService({ ...data, date: formatFns(data.date, 'yyyy-MM-dd'), partyId: party.id, enabled: true });
         toast({ title: 'Success' });
         setIsFormOpen(false);
+        transactionForm.reset();
     } catch (e: any) { toast({ variant: 'destructive', title: 'Error', description: e.message }); }
   };
 
@@ -447,25 +458,106 @@ function PartyLedgerPageContent({ params: paramsPromise }: { params: Promise<{ p
   const openFormDialog = (type: 'give' | 'receive' | 'spent' | 'credit_give' | 'credit_income') => {
     setFormType(type);
     transactionForm.reset({
-        date: new Date(), description: '', amount: '' as any, accountId: defaultAccountId, type: type,
-        via: party?.group || 'Personal', charge: 0, chargeVia: party?.group || 'Personal',
+        date: new Date(), 
+        description: '', 
+        amount: '' as any, 
+        accountId: defaultAccountId, 
+        type: type,
+        via: party?.group || 'Personal', 
+        charge: 0, 
+        chargeVia: party?.group || 'Personal',
     });
     setIsFormOpen(true);
   };
 
-  if (loading || !party) return <div className="flex justify-center items-center h-screen"><Loader2 className="animate-spin text-primary" /></div>;
+  const handleMarkEmiAsPaid = async (data: any) => {
+    if (payingInstallment) {
+      await markEmiAsPaid(partyId, payingInstallment.loanId, payingInstallment.index, data);
+      toast({ title: "EMI Paid!" });
+      setPayingInstallment(null);
+    }
+  };
+
+  const handleEditEmiPayment = async (data: any) => {
+    if (payingInstallment) {
+      await editEmiPaymentTransactions(partyId, payingInstallment.loanId, payingInstallment.index, data);
+      toast({ title: "EMI Updated!" });
+      setPayingInstallment(null);
+    }
+  };
+
+  const handleDeleteEmiPayment = async () => {
+    if (payingInstallment) {
+      await deleteEmiPayment(partyId, payingInstallment.loanId, payingInstallment.index);
+      toast({ title: "EMI Payment Deleted!" });
+      setPayingInstallment(null);
+    }
+  };
+
+  if (loading) return (
+    <div className="flex justify-center items-center h-screen">
+      <Loader2 className="animate-spin text-primary h-8 w-8" />
+    </div>
+  );
+  
+  if (!party) return (
+    <div className="flex flex-col justify-center items-center h-screen gap-4">
+      <p className="text-muted-foreground">Party not found</p>
+      <Button onClick={() => router.push('/parties')}>Back to Parties</Button>
+    </div>
+  );
 
   return (
     <SidebarInset className="flex flex-col bg-gray-50 dark:bg-gray-900">
-        <PartyTransactionEditDialog transaction={editingTransaction} onOpenChange={(open) => !open && setEditingTransaction(null)} onSave={handleUpdateTransaction} parties={parties} accounts={accounts} inventoryItems={[]} appSettings={appSettings} />
-        <PaymentReceiptDialog isOpen={!!viewingReceipt} onOpenChange={() => setViewingReceipt(null)} transaction={viewingReceipt} party={party} appSettings={appSettings} accounts={accounts} allTransactions={allTransactions} />
-        <InvoiceDialog isOpen={!!viewingInvoice} onOpenChange={(open) => !open && setViewingInvoice(null)} invoice={viewingInvoice} party={party} parties={parties} appSettings={appSettings} onPrint={() => {}} ref={invoiceRef} accounts={accounts} allTransactions={allTransactions} />
+        <PartyTransactionEditDialog 
+          transaction={editingTransaction} 
+          onOpenChange={(open) => !open && setEditingTransaction(null)} 
+          onSave={handleUpdateTransaction} 
+          parties={parties} 
+          accounts={accounts} 
+          inventoryItems={[]} 
+          appSettings={appSettings} 
+        />
+        <PaymentReceiptDialog 
+          isOpen={!!viewingReceipt} 
+          onOpenChange={() => setViewingReceipt(null)} 
+          transaction={viewingReceipt} 
+          party={party} 
+          appSettings={appSettings} 
+          accounts={accounts} 
+          allTransactions={allTransactions} 
+        />
+        <InvoiceDialog 
+          isOpen={!!viewingInvoice} 
+          onOpenChange={(open) => !open && setViewingInvoice(null)} 
+          invoice={viewingInvoice} 
+          party={party} 
+          parties={parties} 
+          appSettings={appSettings} 
+          onPrint={() => {}} 
+          ref={invoiceRef} 
+          accounts={accounts} 
+          allTransactions={allTransactions} 
+        />
         
         {payingInstallment && (
-            <PayEmiDialog isOpen={!!payingInstallment} onOpenChange={() => setPayingInstallment(null)} installment={payingInstallment.installment} accounts={accounts} onConfirm={payingInstallment.installment.status === 'paid' ? handleEditEmiPaymentTransactions : markEmiAsPaid} onDelete={deleteEmiPayment} />
+            <PayEmiDialog 
+              isOpen={!!payingInstallment} 
+              onOpenChange={() => setPayingInstallment(null)} 
+              installment={payingInstallment.installment} 
+              accounts={accounts} 
+              onConfirm={payingInstallment.installment.status === 'paid' ? handleEditEmiPayment : handleMarkEmiAsPaid} 
+              onDelete={handleDeleteEmiPayment} 
+            />
         )}
         {editingLoan && (
-            <EditLoanDialog isOpen={!!editingLoan} onOpenChange={() => setEditingLoan(null)} loan={editingLoan} onSave={(id, data) => updateLoanDetails(partyId, id, data).then(() => { toast({title: "Updated"}); setEditingLoan(null); })} accounts={accounts} />
+            <EditLoanDialog 
+              isOpen={!!editingLoan} 
+              onOpenChange={() => setEditingLoan(null)} 
+              loan={editingLoan} 
+              onSave={(id, data) => updateLoanDetails(partyId, id, data).then(() => { toast({title: "Updated"}); setEditingLoan(null); })} 
+              accounts={accounts} 
+            />
         )}
 
         <Dialog open={isSmsDialogOpen} onOpenChange={setIsSmsDialogOpen}>
@@ -492,18 +584,41 @@ function PartyLedgerPageContent({ params: paramsPromise }: { params: Promise<{ p
             <div className="container mx-auto px-3 py-2">
                 <div className="flex items-center justify-between gap-2">
                     <div className="flex items-center gap-2">
-                        <Button variant="ghost" size="icon" asChild className="h-8 w-8"><Link href="/parties"><ArrowLeft className="h-4 w-4" /></Link></Button>
-                        <Avatar className="h-8 w-8"><AvatarFallback className="bg-red-500 text-white font-bold text-xs">{party.name?.charAt(0)}</AvatarFallback></Avatar>
-                        <div><h1 className="text-sm font-bold truncate max-w-[150px]">{party.name}</h1><p className="text-[10px] text-muted-foreground">{party.phone || 'No Phone'}</p></div>
+                        <Button variant="ghost" size="icon" asChild className="h-8 w-8">
+                            <Link href="/parties"><ArrowLeft className="h-4 w-4" /></Link>
+                        </Button>
+                        <Avatar className="h-8 w-8">
+                            <AvatarFallback className="bg-red-500 text-white font-bold text-xs">
+                                {party.name?.charAt(0) || 'P'}
+                            </AvatarFallback>
+                        </Avatar>
+                        <div>
+                            <h1 className="text-sm font-bold truncate max-w-[150px]">{party.name}</h1>
+                            <p className="text-[10px] text-muted-foreground">{party.phone || 'No Phone'}</p>
+                        </div>
                     </div>
                     <div className="flex items-center gap-2">
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-green-600" asChild><a href={`https://wa.me/${party.phone?.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer"><MessageSquare className="h-4 w-4" /></a></Button>
-                        <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600" asChild><a href={`tel:${party.phone}`}><Phone className="h-4 w-4" /></a></Button>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-green-600" asChild>
+                            <a href={`https://wa.me/${party.phone?.replace(/[^0-9]/g, '')}`} target="_blank" rel="noopener noreferrer">
+                                <MessageSquare className="h-4 w-4" />
+                            </a>
+                        </Button>
+                        <Button variant="ghost" size="icon" className="h-8 w-8 text-blue-600" asChild>
+                            <a href={`tel:${party.phone}`}><Phone className="h-4 w-4" /></a>
+                        </Button>
                         <DropdownMenu>
-                            <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-8 w-8"><MoreVertical className="h-4 w-4"/></Button></DropdownMenuTrigger>
+                            <DropdownMenuTrigger asChild>
+                                <Button variant="ghost" size="icon" className="h-8 w-8">
+                                    <MoreVertical className="h-4 w-4"/>
+                                </Button>
+                            </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                                <DropdownMenuItem onClick={() => router.push(`/parties?edit=${party.id}`)}><Edit className="mr-2 h-3 w-3" /> Edit Party</DropdownMenuItem>
-                                <DropdownMenuItem onClick={() => recalculateBalancesFromTransaction()}><RefreshCcw className="mr-2 h-3 w-3" /> Sync Balance</DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => router.push(`/parties?edit=${party.id}`)}>
+                                    <Edit className="mr-2 h-3 w-3" /> Edit Party
+                                </DropdownMenuItem>
+                                <DropdownMenuItem onClick={() => recalculateBalancesFromTransaction()}>
+                                    <RefreshCcw className="mr-2 h-3 w-3" /> Sync Balance
+                                </DropdownMenuItem>
                             </DropdownMenuContent>
                         </DropdownMenu>
                     </div>
@@ -511,18 +626,34 @@ function PartyLedgerPageContent({ params: paramsPromise }: { params: Promise<{ p
                 <div className="mt-2">
                     <Card className="bg-gray-100 dark:bg-gray-800 border-0 shadow-sm">
                         <CardContent className="p-2 text-center">
-                            <p className="text-[8px] uppercase font-black text-gray-500 tracking-wider">{currentBalance >= 0 ? 'NET PAYABLE' : 'NET RECEIVABLE'}</p>
-                            <p className={cn("text-xl font-black", currentBalance >= 0 ? "text-red-600" : "text-green-600")}>৳{formatAmount(Math.abs(currentBalance), false)}</p>
+                            <p className="text-[8px] uppercase font-black text-gray-500 tracking-wider">
+                                {currentBalance >= 0 ? 'NET PAYABLE' : 'NET RECEIVABLE'}
+                            </p>
+                            <p className={cn("text-xl font-black", currentBalance >= 0 ? "text-red-600" : "text-green-600")}>
+                                ৳{formatAmount(Math.abs(currentBalance), false)}
+                            </p>
                         </CardContent>
                     </Card>
                 </div>
                 <div className="grid grid-cols-6 gap-1 mt-2 mb-1 max-w-md mx-auto">
-                    <Button variant="ghost" size="sm" className="h-auto py-1 px-1 flex flex-col items-center gap-0" onClick={() => setActiveTab("loan")}><Landmark className="h-4 w-4" /><span className="text-[9px]">LOAN</span></Button>
-                    <Button variant="ghost" size="sm" className="h-auto py-1 px-1 flex flex-col items-center gap-0" asChild><Link href={`/old-data?partyId=${party.id}`}><FileUp className="h-4 w-4" /><span className="text-[9px]">OLD</span></Link></Button>
-                    <Button variant="ghost" size="sm" className="h-auto py-1 px-1 flex flex-col items-center gap-0" onClick={() => openFormDialog('spent')}><Briefcase className="h-4 w-4" /><span className="text-[9px]">EXP</span></Button>
-                    <Button variant="ghost" size="sm" className="h-auto py-1 px-1 flex flex-col items-center gap-0" asChild><Link href={`/pos?partyId=${party.id}`}><ShoppingCart className="h-4 w-4" /><span className="text-[9px]">POS</span></Link></Button>
-                    <Button variant="ghost" size="sm" className="h-auto py-1 px-1 flex flex-col items-center gap-0" onClick={() => window.print()}><Printer className="h-4 w-4" /><span className="text-[9px]">PRINT</span></Button>
-                    <Button variant="ghost" size="sm" className="h-auto py-1 px-1 flex flex-col items-center gap-0" onClick={() => {}}><Share2 className="h-4 w-4" /><span className="text-[9px]">SHARE</span></Button>
+                    <Button variant="ghost" size="sm" className="h-auto py-1 px-1 flex flex-col items-center gap-0" onClick={() => setActiveTab("loan")}>
+                        <Landmark className="h-4 w-4" /><span className="text-[9px]">LOAN</span>
+                    </Button>
+                    <Button variant="ghost" size="sm" className="h-auto py-1 px-1 flex flex-col items-center gap-0" asChild>
+                        <Link href={`/old-data?partyId=${party.id}`}><FileUp className="h-4 w-4" /><span className="text-[9px]">OLD</span></Link>
+                    </Button>
+                    <Button variant="ghost" size="sm" className="h-auto py-1 px-1 flex flex-col items-center gap-0" onClick={() => openFormDialog('spent')}>
+                        <Briefcase className="h-4 w-4" /><span className="text-[9px]">EXP</span>
+                    </Button>
+                    <Button variant="ghost" size="sm" className="h-auto py-1 px-1 flex flex-col items-center gap-0" asChild>
+                        <Link href={`/pos?partyId=${party.id}`}><ShoppingCart className="h-4 w-4" /><span className="text-[9px]">POS</span></Link>
+                    </Button>
+                    <Button variant="ghost" size="sm" className="h-auto py-1 px-1 flex flex-col items-center gap-0" onClick={() => window.print()}>
+                        <Printer className="h-4 w-4" /><span className="text-[9px]">PRINT</span>
+                    </Button>
+                    <Button variant="ghost" size="sm" className="h-auto py-1 px-1 flex flex-col items-center gap-0" onClick={() => {}}>
+                        <Share2 className="h-4 w-4" /><span className="text-[9px]">SHARE</span>
+                    </Button>
                 </div>
             </div>
         </header>
@@ -538,13 +669,29 @@ function PartyLedgerPageContent({ params: paramsPromise }: { params: Promise<{ p
             <TabsContent value="transactions" className="space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-2 p-2 bg-white dark:bg-gray-800 rounded-lg border shadow-sm">
                     <div className="flex items-center gap-1">
-                        <Input type="date" value={filters.dateFrom} onChange={e => setFilters({...filters, dateFrom: e.target.value})} className="h-7 w-28 text-[10px]" />
+                        <Input 
+                            type="date" 
+                            value={filters.dateFrom} 
+                            onChange={e => setFilters({...filters, dateFrom: e.target.value})} 
+                            className="h-7 w-28 text-[10px]" 
+                        />
                         <span className="text-xs text-muted-foreground">to</span>
-                        <Input type="date" value={filters.dateTo} onChange={e => setFilters({...filters, dateTo: e.target.value})} className="h-7 w-28 text-[10px]" />
+                        <Input 
+                            type="date" 
+                            value={filters.dateTo} 
+                            onChange={e => setFilters({...filters, dateTo: e.target.value})} 
+                            className="h-7 w-28 text-[10px]" 
+                        />
                     </div>
                     <div className="flex items-center gap-2">
-                      <div className="flex items-center space-x-1"><Checkbox id="inc-int" checked={includeInternalTx} onCheckedChange={(c) => setIncludeInternalTx(!!c)}/><Label htmlFor="inc-int" className="text-[10px]">INC/EXP</Label></div>
-                      <div className="flex items-center space-x-1"><Switch id="filter-sw" checked={isDateFilterEnabled} onCheckedChange={setIsDateFilterEnabled} className="h-4 w-7"/><Label htmlFor="filter-sw" className="text-[10px]">FILTER</Label></div>
+                      <div className="flex items-center space-x-1">
+                        <Checkbox id="inc-int" checked={includeInternalTx} onCheckedChange={(c) => setIncludeInternalTx(!!c)}/>
+                        <Label htmlFor="inc-int" className="text-[10px]">INC/EXP</Label>
+                      </div>
+                      <div className="flex items-center space-x-1">
+                        <Switch id="filter-sw" checked={isDateFilterEnabled} onCheckedChange={setIsDateFilterEnabled} className="h-4 w-7"/>
+                        <Label htmlFor="filter-sw" className="text-[10px]">FILTER</Label>
+                      </div>
                     </div>
                 </div>
                 <div className="rounded-lg border bg-card shadow-sm overflow-x-auto">
@@ -571,7 +718,9 @@ function PartyLedgerPageContent({ params: paramsPromise }: { params: Promise<{ p
                         {groupedTransactions.map(([date, txs]) => (
                           <React.Fragment key={date}>
                             <TableRow className="bg-primary/5 hover:bg-primary/10">
-                              <TableCell colSpan={7} className="py-1 px-3 font-bold text-[10px] text-primary">{formatDate(date)}</TableCell>
+                              <TableCell colSpan={7} className="py-1 px-3 font-bold text-[10px] text-primary">
+                                {formatDate(date)}
+                              </TableCell>
                             </TableRow>
                             {txs.map((t, idx) => {
                               const isDebit = ['give', 'purchase', 'spent', 'credit_sale', 'purchase_return', 'credit_give'].includes(t.type);
@@ -587,19 +736,41 @@ function PartyLedgerPageContent({ params: paramsPromise }: { params: Promise<{ p
                                             <div className="flex items-center gap-1">
                                               <Badge variant="outline" className="text-[8px] w-fit h-3 uppercase">{t.type}</Badge>
                                               {t.accountId && <span className="text-[8px] font-bold text-primary">| {accounts.find(a => a.id === t.accountId)?.name}</span>}
-                                              {isInvoice && <Button variant="link" className="h-auto p-0 text-[8px]" onClick={() => setViewingInvoice(t)}>Invoice</Button>}
+                                              {isInvoice && (
+                                                <Button 
+                                                  variant="link" 
+                                                  className="h-auto p-0 text-[8px]" 
+                                                  onClick={() => setViewingInvoice(t)}
+                                                >
+                                                  Invoice
+                                                </Button>
+                                              )}
                                             </div>
                                         </div>
                                     </TableCell>
-                                    <TableCell className="text-right text-red-600 text-[10px]">{isDebit ? formatAmount(t.amount) : '-'}</TableCell>
-                                    <TableCell className="text-right text-green-600 text-[10px]">{isCredit ? formatAmount(t.amount) : '-'}</TableCell>
-                                    <TableCell className="text-right font-bold text-[10px]">{formatAmount(t.runningBalance)}</TableCell>
+                                    <TableCell className="text-right text-red-600 text-[10px]">
+                                        {isDebit ? formatAmount(t.amount) : '-'}
+                                    </TableCell>
+                                    <TableCell className="text-right text-green-600 text-[10px]">
+                                        {isCredit ? formatAmount(t.amount) : '-'}
+                                    </TableCell>
+                                    <TableCell className="text-right font-bold text-[10px]">
+                                        {formatAmount(t.runningBalance)}
+                                    </TableCell>
                                     <TableCell className="text-right">
                                         <DropdownMenu>
-                                            <DropdownMenuTrigger asChild><Button variant="ghost" size="icon" className="h-6 w-6"><MoreVertical className="h-3 w-3" /></Button></DropdownMenuTrigger>
+                                            <DropdownMenuTrigger asChild>
+                                                <Button variant="ghost" size="icon" className="h-6 w-6">
+                                                    <MoreVertical className="h-3 w-3" />
+                                                </Button>
+                                            </DropdownMenuTrigger>
                                             <DropdownMenuContent align="end">
-                                                <DropdownMenuItem onClick={() => setEditingTransaction(t)}><Edit className="mr-2 h-4 w-4"/> Edit</DropdownMenuItem>
-                                                <DropdownMenuItem className="text-destructive" onClick={() => handleDeleteTransaction(t.id)}><Trash2 className="mr-2 h-4 w-4"/> Disable</DropdownMenuItem>
+                                                <DropdownMenuItem onClick={() => setEditingTransaction(t)}>
+                                                    <Edit className="mr-2 h-4 w-4"/> Edit
+                                                </DropdownMenuItem>
+                                                <DropdownMenuItem className="text-destructive" onClick={() => handleDeleteTransaction(t.id)}>
+                                                    <Trash2 className="mr-2 h-4 w-4"/> Disable
+                                                </DropdownMenuItem>
                                             </DropdownMenuContent>
                                         </DropdownMenu>
                                     </TableCell>
@@ -626,19 +797,36 @@ function PartyLedgerPageContent({ params: paramsPromise }: { params: Promise<{ p
                     <Card>
                         <CardHeader><CardTitle>Performance Summary</CardTitle></CardHeader>
                         <CardContent className="space-y-2 text-sm">
-                            <div className="flex justify-between"><span>Total Debit Items (Dr):</span> <span className="font-medium text-red-600">{formatAmount(partyAnalysis.totalGive)}</span></div>
-                            <div className="flex justify-between"><span>Total Credit Items (Cr):</span> <span className="font-medium text-green-600">{formatAmount(partyAnalysis.totalReceive)}</span></div>
-                            <div className="flex justify-between font-bold text-primary"><span>Total Profit Generated:</span> <span>{formatAmount(partyAnalysis.totalProfit)}</span></div>
+                            <div className="flex justify-between">
+                                <span>Total Debit Items (Dr):</span> 
+                                <span className="font-medium text-red-600">{formatAmount(partyAnalysis.totalGive)}</span>
+                            </div>
+                            <div className="flex justify-between">
+                                <span>Total Credit Items (Cr):</span> 
+                                <span className="font-medium text-green-600">{formatAmount(partyAnalysis.totalReceive)}</span>
+                            </div>
+                            <div className="flex justify-between font-bold text-primary">
+                                <span>Total Profit Generated:</span> 
+                                <span>{formatAmount(partyAnalysis.totalProfit)}</span>
+                            </div>
                         </CardContent>
                     </Card>
                     <Card>
                         <CardHeader><CardTitle>Products Purchased</CardTitle></CardHeader>
                         <CardContent>
                             <Table>
-                                <TableHeader><TableRow><TableHead>Product</TableHead><TableHead className="text-right">Qty</TableHead></TableRow></TableHeader>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHead>Product</TableHead>
+                                        <TableHead className="text-right">Qty</TableHead>
+                                    </TableRow>
+                                </TableHeader>
                                 <TableBody>
                                     {soldProductsSummary.map((p, i) => (
-                                        <TableRow key={i}><TableCell>{p.name}</TableCell><TableCell className="text-right">{p.quantity}</TableCell></TableRow>
+                                        <TableRow key={i}>
+                                            <TableCell>{p.name}</TableCell>
+                                            <TableCell className="text-right">{p.quantity}</TableCell>
+                                        </TableRow>
                                     ))}
                                 </TableBody>
                             </Table>
@@ -656,17 +844,45 @@ function PartyLedgerPageContent({ params: paramsPromise }: { params: Promise<{ p
                             <Card key={loan.id} className="bg-muted/50 p-3">
                                 <div className="flex justify-between items-center mb-2">
                                     <p className="font-bold text-xs">Loan #{loan.loanNumber}</p>
-                                    <Button variant="destructive" size="sm" className="h-7 text-[10px]" onClick={() => deleteLoan(partyId, loan.id)}>Delete</Button>
+                                    <div className="flex gap-2">
+                                        <Button 
+                                            variant="outline" 
+                                            size="sm" 
+                                            className="h-7 text-[10px]"
+                                            onClick={() => setEditingLoan(loan)}
+                                        >
+                                            Edit
+                                        </Button>
+                                        <Button 
+                                            variant="destructive" 
+                                            size="sm" 
+                                            className="h-7 text-[10px]" 
+                                            onClick={() => deleteLoan(partyId, loan.id)}
+                                        >
+                                            Delete
+                                        </Button>
+                                    </div>
                                 </div>
                                 <Table>
-                                    <TableHeader><TableRow><TableHead className="text-[10px]">EMI#</TableHead><TableHead className="text-[10px]">Date</TableHead><TableHead className="text-right text-[10px]">Pay</TableHead></TableRow></TableHeader>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead className="text-[10px]">EMI#</TableHead>
+                                            <TableHead className="text-[10px]">Date</TableHead>
+                                            <TableHead className="text-right text-[10px]">Pay</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
                                     <TableBody>
                                         {loan.schedule.map((emi, idx) => (
                                             <TableRow key={idx}>
                                                 <TableCell className="text-[10px]">{emi.installment}</TableCell>
                                                 <TableCell className="text-[10px]">{formatDate(emi.dueDate)}</TableCell>
                                                 <TableCell className="text-right">
-                                                    <Button size="sm" className="h-6 text-[9px]" variant={emi.status === 'paid' ? 'outline' : 'default'} onClick={() => setPayingInstallment({ loanId: loan.id, installment: emi, index: idx })}>
+                                                    <Button 
+                                                        size="sm" 
+                                                        className="h-6 text-[9px]" 
+                                                        variant={emi.status === 'paid' ? 'outline' : 'default'} 
+                                                        onClick={() => setPayingInstallment({ loanId: loan.id, installment: emi, index: idx })}
+                                                    >
                                                         {emi.status.toUpperCase()}
                                                     </Button>
                                                 </TableCell>
@@ -676,6 +892,9 @@ function PartyLedgerPageContent({ params: paramsPromise }: { params: Promise<{ p
                                 </Table>
                             </Card>
                         ))}
+                        {(!party.loans || party.loans.length === 0) && (
+                            <p className="text-center text-muted-foreground text-sm py-4">No active loans</p>
+                        )}
                     </CardContent>
                 </Card>
             </TabsContent>
@@ -686,7 +905,11 @@ function PartyLedgerPageContent({ params: paramsPromise }: { params: Promise<{ p
                 <CardContent className="p-0">
                   <Table>
                     <TableHeader>
-                      <TableRow><TableHead className="text-[10px]">Date</TableHead><TableHead className="text-[10px]">Description</TableHead><TableHead className="text-right text-[10px]">Balance</TableHead></TableRow>
+                      <TableRow>
+                        <TableHead className="text-[10px]">Date</TableHead>
+                        <TableHead className="text-[10px]">Description</TableHead>
+                        <TableHead className="text-right text-[10px]">Balance</TableHead>
+                      </TableRow>
                     </TableHeader>
                     <TableBody>
                       {oldLedger.map((r, i) => (
@@ -696,6 +919,13 @@ function PartyLedgerPageContent({ params: paramsPromise }: { params: Promise<{ p
                           <TableCell className="text-right font-bold text-[10px]">{formatAmount(Number(r['Balance (৳)']))}</TableCell>
                         </TableRow>
                       ))}
+                      {oldLedger.length === 0 && (
+                        <TableRow>
+                          <TableCell colSpan={3} className="text-center text-muted-foreground py-4">
+                            No historical data available
+                          </TableCell>
+                        </TableRow>
+                      )}
                     </TableBody>
                   </Table>
                 </CardContent>
@@ -707,23 +937,39 @@ function PartyLedgerPageContent({ params: paramsPromise }: { params: Promise<{ p
         <footer className="fixed bottom-0 left-0 right-0 z-30 bg-background border-t p-2 shadow-lg no-print">
             <div className="container mx-auto grid grid-cols-2 gap-2 max-w-md">
                 <Dialog open={isGiveOptionsOpen} onOpenChange={setIsGiveOptionsOpen}>
-                    <DialogTrigger asChild><Button className="h-10 bg-red-600 hover:bg-red-700 text-white font-bold text-xs"><ArrowUp className="mr-1 h-3 w-3"/> I Gave</Button></DialogTrigger>
+                    <DialogTrigger asChild>
+                        <Button className="h-10 bg-red-600 hover:bg-red-700 text-white font-bold text-xs">
+                            <ArrowUp className="mr-1 h-3 w-3"/> I Gave
+                        </Button>
+                    </DialogTrigger>
                     <DialogContent className="max-w-xs">
                         <DialogHeader><DialogTitle>Select "Give" Type</DialogTitle></DialogHeader>
                         <div className="grid gap-2 py-4">
-                            <Button onClick={() => { openFormDialog('give'); setIsGiveOptionsOpen(false); }}>Give (Paid)</Button>
-                            <Button onClick={() => { openFormDialog('credit_give'); setIsGiveOptionsOpen(false); }} variant="outline">Credit Give (Due)</Button>
+                            <Button onClick={() => { openFormDialog('give'); setIsGiveOptionsOpen(false); }}>
+                                Give (Paid)
+                            </Button>
+                            <Button onClick={() => { openFormDialog('credit_give'); setIsGiveOptionsOpen(false); }} variant="outline">
+                                Credit Give (Due)
+                            </Button>
                         </div>
                     </DialogContent>
                 </Dialog>
 
                 <Dialog open={isReceiveOptionsOpen} onOpenChange={setIsReceiveOptionsOpen}>
-                    <DialogTrigger asChild><Button className="h-10 bg-green-600 hover:bg-green-700 text-white font-bold text-xs"><ArrowDown className="mr-1 h-3 w-3"/> I Received</Button></DialogTrigger>
+                    <DialogTrigger asChild>
+                        <Button className="h-10 bg-green-600 hover:bg-green-700 text-white font-bold text-xs">
+                            <ArrowDown className="mr-1 h-3 w-3"/> I Received
+                        </Button>
+                    </DialogTrigger>
                     <DialogContent className="max-w-xs">
                         <DialogHeader><DialogTitle>Select "Receive" Type</DialogTitle></DialogHeader>
                         <div className="grid gap-4 py-4">
-                            <Button onClick={() => { openFormDialog('receive'); setIsReceiveOptionsOpen(false); }}>Receive Payment</Button>
-                            <Button onClick={() => { openFormDialog('credit_income'); setIsReceiveOptionsOpen(false); }} variant="outline">Credit Income (Due)</Button>
+                            <Button onClick={() => { openFormDialog('receive'); setIsReceiveOptionsOpen(false); }}>
+                                Receive Payment
+                            </Button>
+                            <Button onClick={() => { openFormDialog('credit_income'); setIsReceiveOptionsOpen(false); }} variant="outline">
+                                Credit Income (Due)
+                            </Button>
                         </div>
                     </DialogContent>
                 </Dialog>
@@ -735,30 +981,70 @@ function PartyLedgerPageContent({ params: paramsPromise }: { params: Promise<{ p
                 <DialogHeader><DialogTitle className="uppercase text-xs">{formType}</DialogTitle></DialogHeader>
                 <form onSubmit={transactionForm.handleSubmit(handleAddTransaction)}>
                     <div className="space-y-3">
-                        <div className="flex justify-end"><Button type="button" variant="outline" size="sm" onClick={handleSmsSearch}><Search className="mr-2 h-4 w-4"/> Search SMS</Button></div>
-                        <div className="grid grid-cols-2 gap-2">
-                            <div className="space-y-1"><Label className="text-[10px]">Amount</Label><Input type="number" step="0.01" {...transactionForm.register('amount')} className="h-8 text-xs" /></div>
-                            <div className="space-y-1"><Label className="text-[10px]">Date</Label><DatePicker value={transactionForm.watch('date')} onChange={d => transactionForm.setValue('date', d as Date)} /></div>
+                        <div className="flex justify-end">
+                            <Button type="button" variant="outline" size="sm" onClick={handleSmsSearch}>
+                                <Search className="mr-2 h-4 w-4"/> Search SMS
+                            </Button>
                         </div>
-                        <div className="space-y-1"><Label className="text-[10px]">Description</Label><Input {...transactionForm.register('description')} className="h-8 text-xs" /></div>
+                        <div className="grid grid-cols-2 gap-2">
+                            <div className="space-y-1">
+                                <Label className="text-[10px]">Amount</Label>
+                                <Input type="number" step="0.01" {...transactionForm.register('amount')} className="h-8 text-xs" />
+                            </div>
+                            <div className="space-y-1">
+                                <Label className="text-[10px]">Date</Label>
+                                <DatePicker 
+                                    value={transactionForm.watch('date')} 
+                                    onChange={d => transactionForm.setValue('date', d as Date)} 
+                                />
+                            </div>
+                        </div>
+                        <div className="space-y-1">
+                            <Label className="text-[10px]">Description</Label>
+                            <Input {...transactionForm.register('description')} className="h-8 text-xs" />
+                        </div>
                         <div className="grid grid-cols-2 gap-2">
                             <div className="space-y-1">
                                 <Label className="text-[10px]">Account</Label>
-                                <Select onValueChange={v => transactionForm.setValue('accountId', v)} value={transactionForm.watch('accountId')}>
-                                    <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Account"/></SelectTrigger>
-                                    <SelectContent>{accounts.map(acc => <SelectItem key={acc.id} value={acc.id}>{acc.name}</SelectItem>)}</SelectContent>
+                                <Select 
+                                    onValueChange={v => transactionForm.setValue('accountId', v)} 
+                                    value={transactionForm.watch('accountId')}
+                                >
+                                    <SelectTrigger className="h-8 text-xs">
+                                        <SelectValue placeholder="Account"/>
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {accounts.map(acc => <SelectItem key={acc.id} value={acc.id}>{acc.name}</SelectItem>)}
+                                    </SelectContent>
                                 </Select>
                             </div>
                             <div className="space-y-1">
                                 <Label className="text-[10px]">Profile (Via)</Label>
-                                <Select onValueChange={v => transactionForm.setValue('via', v)} value={transactionForm.watch('via')}>
-                                    <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Via"/></SelectTrigger>
-                                    <SelectContent>{(appSettings?.businessProfiles || []).map(p => <SelectItem key={p.name} value={p.name}>{p.name}</SelectItem>)}</SelectContent>
+                                <Select 
+                                    onValueChange={v => transactionForm.setValue('via', v)} 
+                                    value={transactionForm.watch('via')}
+                                >
+                                    <SelectTrigger className="h-8 text-xs">
+                                        <SelectValue placeholder="Via"/>
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        {(appSettings?.businessProfiles || []).map(p => <SelectItem key={p.name} value={p.name}>{p.name}</SelectItem>)}
+                                    </SelectContent>
                                 </Select>
                             </div>
                         </div>
-                        <div className="flex items-center space-x-2 pt-1"><Switch id="send-sms-quick" checked={sendSms} onCheckedChange={setSendSms} className="scale-75" /><Label htmlFor="send-sms-quick" className="text-[10px]">Send SMS</Label></div>
-                        <DialogFooter className="pt-2 flex gap-2"><Button type="button" variant="ghost" size="sm" className="flex-1" onClick={() => setIsFormOpen(false)}>Cancel</Button><Button type="submit" size="sm" className="flex-1">Save</Button></DialogFooter>
+                        <div className="flex items-center space-x-2 pt-1">
+                            <Switch id="send-sms-quick" checked={sendSms} onCheckedChange={setSendSms} className="scale-75" />
+                            <Label htmlFor="send-sms-quick" className="text-[10px]">Send SMS</Label>
+                        </div>
+                        <DialogFooter className="pt-2 flex gap-2">
+                            <Button type="button" variant="ghost" size="sm" className="flex-1" onClick={() => setIsFormOpen(false)}>
+                                Cancel
+                            </Button>
+                            <Button type="submit" size="sm" className="flex-1">
+                                Save
+                            </Button>
+                        </DialogFooter>
                     </div>
                 </form>
             </DialogContent>
@@ -768,9 +1054,12 @@ function PartyLedgerPageContent({ params: paramsPromise }: { params: Promise<{ p
 }
 
 export default function PartyLedgerPageWrapper(props: { params: Promise<{ partyId: string }> }) {
+  const params = use(props.params);
+  const partyId = params.partyId;
+  
   return (
     <Suspense fallback={<div className="flex justify-center items-center h-screen"><Loader2 className="animate-spin text-primary" /></div>}>
-      <PartyLedgerPage {...props} />
+      <PartyLedgerPageContent partyId={partyId} />
     </Suspense>
   );
 }
