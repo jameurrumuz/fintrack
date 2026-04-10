@@ -1,6 +1,6 @@
 'use client';
 
-import { db } from '@/lib/firebase';
+import { db, isFirebaseConfigured } from '@/lib/firebase';
 import { Party, Transaction, Loan, ActivityLog } from '@/types';
 import { collection, getDocs, addDoc, doc, updateDoc, deleteDoc, runTransaction, query, orderBy, onSnapshot, serverTimestamp, getDoc, setDoc, where, writeBatch, limit, DocumentReference, Transaction as FirestoreTransaction, Timestamp, arrayUnion } from 'firebase/firestore';
 import { addTransaction as addTxService, updateTransaction, deleteTransaction, getAccountSnaps } from './transactionService';
@@ -8,12 +8,12 @@ import { getEffectiveAmount, cleanUndefined } from '@/lib/utils';
 
 
 const getPartiesCollection = () => {
-    if (!db) return null;
+    if (!db || !isFirebaseConfigured) return null;
     return collection(db, 'parties');
 }
 
 const getOldDataLedgersCollection = () => {
-    if (!db) return null;
+    if (!db || !isFirebaseConfigured) return null;
     return collection(db, 'old_data_ledgers');
 }
 
@@ -23,7 +23,7 @@ export function subscribeToParties(
   onError: (error: Error) => void
 ) {
   const partiesCollection = getPartiesCollection();
-  if (!partiesCollection) {
+  if (!partiesCollection || !isFirebaseConfigured) {
     const error = new Error('Firebase is not configured correctly. Parties service cannot start.');
     onError(error);
     return () => {}; // Return a no-op unsubscribe function
@@ -59,7 +59,7 @@ export function subscribeToViewableParties(
   onError: (error: Error) => void
 ) {
   const partiesCollection = getPartiesCollection();
-  if (!partiesCollection) {
+  if (!partiesCollection || !isFirebaseConfigured) {
     const error = new Error('Firebase is not configured.');
     onError(error);
     return () => {};
@@ -101,7 +101,7 @@ export function subscribeToViewableParties(
 
 export async function addParty(party: Omit<Party, 'id'>): Promise<string> {
   const partiesCollection = getPartiesCollection();
-  if (!partiesCollection) throw new Error('Firebase is not configured.');
+  if (!partiesCollection || !isFirebaseConfigured) throw new Error('Firebase is not configured.');
   const now = serverTimestamp();
   const docRef = await addDoc(partiesCollection, {
       ...party,
@@ -115,7 +115,7 @@ export async function addParty(party: Omit<Party, 'id'>): Promise<string> {
 
 
 export async function updateParty(id: string, party: Partial<Omit<Party, 'id'>>): Promise<void> {
-  if (!db) throw new Error('Firebase is not configured.');
+  if (!db || !isFirebaseConfigured) throw new Error('Firebase is not configured.');
   const partyDoc = doc(db, 'parties', id);
   const now = serverTimestamp();
   
@@ -129,20 +129,20 @@ export async function updateParty(id: string, party: Partial<Omit<Party, 'id'>>)
 }
 
 export async function deleteParty(id: string): Promise<void> {
-  if (!db) throw new Error('Firebase is not configured.');
+  if (!db || !isFirebaseConfigured) throw new Error('Firebase is not configured.');
   const partyDoc = doc(db, 'parties', id);
   await deleteDoc(partyDoc);
 }
 
 export async function updateLastContacted(partyId: string): Promise<void> {
-    if (!db) throw new Error('Firebase is not configured.');
+    if (!db || !isFirebaseConfigured) throw new Error('Firebase is not configured.');
     const partyRef = doc(db, 'parties', partyId);
     await updateDoc(partyRef, { lastContacted: serverTimestamp() });
 }
 
 export async function saveOldLedgerData(partyId: string, newData: Record<string, string | number>[], overwrite = false): Promise<void> {
   const oldDataLedgersCollection = getOldDataLedgersCollection();
-  if (!oldDataLedgersCollection || !db) throw new Error('Firebase is not configured.');
+  if (!oldDataLedgersCollection || !db || !isFirebaseConfigured) throw new Error('Firebase is not configured.');
   
   const ledgerDocRef = doc(oldDataLedgersCollection, partyId);
 
@@ -167,7 +167,7 @@ export async function saveOldLedgerData(partyId: string, newData: Record<string,
 
 export async function getOldLedgerData(partyId: string): Promise<Record<string, string | number>[] | null> {
     const oldDataLedgersCollection = getOldDataLedgersCollection();
-    if (!oldDataLedgersCollection || !db) throw new Error('Firebase is not configured.');
+    if (!oldDataLedgersCollection || !db || !isFirebaseConfigured) throw new Error('Firebase is not configured.');
     const ledgerDocRef = doc(oldDataLedgersCollection, partyId);
     const docSnap = await getDoc(ledgerDocRef);
     if (docSnap.exists()) {
@@ -178,7 +178,7 @@ export async function getOldLedgerData(partyId: string): Promise<Record<string, 
 
 export async function updateOldLedgerEntry(partyId: string, entryIndex: number, updatedEntry: Record<string, any>): Promise<void> {
   const oldDataLedgersCollection = getOldDataLedgersCollection();
-  if (!oldDataLedgersCollection || !db) throw new Error('Firebase is not configured.');
+  if (!oldDataLedgersCollection || !db || !isFirebaseConfigured) throw new Error('Firebase is not configured.');
 
   const ledgerDocRef = doc(oldDataLedgersCollection, partyId);
 
@@ -250,7 +250,7 @@ const createFeeTransaction = (partyId: string, loan: Loan): Omit<Transaction, 'i
 };
 
 export async function saveLoanAndUpdateParty(partyId: string, loan: Omit<Loan, 'id'>): Promise<void> {
-  if (!db) throw new Error("Firebase is not configured.");
+  if (!db || !isFirebaseConfigured) throw new Error("Firebase is not configured.");
 
   const partyRef = doc(db, 'parties', partyId);
   const transactionsCollectionRef = collection(db, 'transactions');
@@ -290,7 +290,7 @@ export async function saveLoanAndUpdateParty(partyId: string, loan: Omit<Loan, '
 
 
 export async function updateLoanDetails(partyId: string, loanId: string, updatedLoanData: Loan): Promise<void> {
-  if (!db) throw new Error("Firebase not configured");
+  if (!db || !isFirebaseConfigured) throw new Error("Firebase not configured");
   
   const partyRef = doc(db, 'parties', partyId);
   const txCol = collection(db, 'transactions');
@@ -311,7 +311,7 @@ export async function updateLoanDetails(partyId: string, loanId: string, updated
 
 
 export async function deleteLoan(partyId: string, loanId: string): Promise<void> {
-  if (!db) throw new Error("Firebase is not configured.");
+  if (!db || !isFirebaseConfigured) throw new Error("Firebase is not configured.");
   const partyRef = doc(db, 'parties', partyId);
   await runTransaction(db, async (fbTransaction) => {
     const partySnap = await fbTransaction.get(partyRef);
@@ -324,7 +324,7 @@ export async function deleteLoan(partyId: string, loanId: string): Promise<void>
 
 
 export async function markEmiAsPaid(partyId: string, loanId: string, installmentIndex: number, paymentDetails: any): Promise<void> {
-    if (!db) throw new Error('Firebase is not configured.');
+    if (!db || !isFirebaseConfigured) throw new Error('Firebase is not configured.');
 
     if (paymentDetails.principal > 0) {
         const principalTx: Omit<Transaction, 'id' | 'enabled'> = {
@@ -385,7 +385,7 @@ export async function editEmiPaymentTransactions(partyId: string, loanId: string
 
 
 export async function deleteEmiPayment(partyId: string, loanId: string, installmentIndex: number): Promise<void> {
-    if (!db) throw new Error('Firebase is not configured.');
+    if (!db || !isFirebaseConfigured) throw new Error('Firebase is not configured.');
     const partyRef = doc(db, 'parties', partyId);
     await runTransaction(db, async (fbTransaction) => {
         const partySnap = await fbTransaction.get(partyRef);
@@ -405,7 +405,7 @@ export async function deleteEmiPayment(partyId: string, loanId: string, installm
 }
 
 export async function incrementServiceUsage(partyId: string, serviceId: string): Promise<void> {
-    if (!db) throw new Error('Firebase is not configured.');
+    if (!db || !isFirebaseConfigured) throw new Error('Firebase is not configured.');
     const partyRef = doc(db, 'parties', partyId);
     await runTransaction(db, async (transaction) => {
         const partyDoc = await transaction.get(partyRef);
@@ -416,7 +416,7 @@ export async function incrementServiceUsage(partyId: string, serviceId: string):
 }
 
 export async function logActivity(partyId: string, action: ActivityLog['action'], details?: ActivityLog['details']) {
-    if (!db) return;
+    if (!db || !isFirebaseConfigured) return;
     try {
         const partyRef = doc(db, 'parties', partyId);
         const newLogEntry = { id: `log-${Date.now()}`, timestamp: new Date().toISOString(), action, details: details || {} };
