@@ -1,7 +1,7 @@
 import { initializeApp, getApps, getApp, FirebaseApp } from 'firebase/app';
-import { getFirestore, Firestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, enableIndexedDbPersistence, CACHE_SIZE_UNLIMITED } from 'firebase/firestore';
+import { getFirestore, Firestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager } from 'firebase/firestore';
 import { getStorage, FirebaseStorage } from 'firebase/storage';
-import { getAuth, Auth, connectAuthEmulator } from 'firebase/auth';
+import { getAuth, Auth } from 'firebase/auth';
 import { getDatabase, Database } from 'firebase/database';
 
 const firebaseConfig = {
@@ -16,6 +16,7 @@ const firebaseConfig = {
 
 // Check if Firebase config is valid
 const isFirebaseConfigValid = () => {
+  if (typeof window === 'undefined') return false;
   return !!(
     firebaseConfig.apiKey &&
     firebaseConfig.projectId &&
@@ -31,8 +32,11 @@ let auth: Auth | undefined;
 let storage: FirebaseStorage | undefined;
 let rtdb: Database | null = null;
 
+// Export the configured flag
+export const isFirebaseConfigured = isFirebaseConfigValid();
+
 // Only initialize Firebase on the client side and if config is valid
-if (typeof window !== 'undefined' && isFirebaseConfigValid()) {
+if (typeof window !== 'undefined' && isFirebaseConfigured) {
   try {
     if (!getApps().length) {
       app = initializeApp(firebaseConfig);
@@ -77,11 +81,6 @@ if (typeof window !== 'undefined' && isFirebaseConfigValid()) {
   }
 } else if (typeof window !== 'undefined') {
   console.warn('Firebase configuration is missing or invalid. Check your environment variables.');
-  console.warn('Expected config:', {
-    hasApiKey: !!firebaseConfig.apiKey,
-    hasProjectId: !!firebaseConfig.projectId,
-    hasAuthDomain: !!firebaseConfig.authDomain,
-  });
 }
 
 // Helper function to check if Firebase is initialized
